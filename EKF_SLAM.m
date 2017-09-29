@@ -126,10 +126,6 @@ x_ = xt(1:3,1); % a priori x = true robot position
 P_ =  0*eye(3); % a priori P = very certain (no error)
 
 
-Fx = [eye(3), zeros(3, 3*N)];
-
-
-
 %----------------------------------------------------------------------- EKF
  %
 x = zeros( dim, N );
@@ -145,23 +141,40 @@ for t = 1:N
     v = u(1,t);		% velocity
     da = u(2,t);	% delta angle
    
-    % Jacobian with respect to robot location
-    G = [1          0 -v*sin(x_(3)+da);...
-         0          1  v*cos(x_(3)+da);...
-         0          0               1];
+    Fx = [eye(3), zeros(3, 3*N)];
 
-    % Jacobian with respect to control
-    V = [cos(x_(3)+da) -v*sin(x_(3)+da);...
-         sin(x_(3)+da)  v*cos(x_(3)+da);...
-                    0               1];
+    x_ = x_ + Fx' * [
+        -v*sin(x_(3)) + v*sin(x_(3) + da);
+        v*cos(x_(3)) - v*cos(x_(3) + da);
+        da];
+                
+    G = eye(3) + Fx' * [
+        1, 0, -v*sin(x_(3)+da);
+        0, 1, v*cos(x_(3)+da);
+        0, 0, 1] * Fx;
+        
+    P_ = G * P_ * G' + Fx' * R * Fx;
     
-    % predicted robot position mean
-    x_ = [x_(1) + v*cos(x_(3)+da);...
-          x_(2) + v*sin(x_(3)+da);...
-                         x_(3)+da];
-
-    % predicted covariance
-    P_ = G*P_*G' + V*M*V';
+    
+    % THAT RANDOM GUY'S CODE THAT WE'LL HAVE TO DELETE
+    
+%     % Jacobian with respect to robot location
+%     G = [1          0 -v*sin(x_(3)+da);...
+%          0          1  v*cos(x_(3)+da);...
+%          0          0               1];
+% 
+%     % Jacobian with respect to control
+%     V = [cos(x_(3)+da) -v*sin(x_(3)+da);...
+%          sin(x_(3)+da)  v*cos(x_(3)+da);...
+%                     0               1];
+%     
+%     % predicted robot position mean
+%     x_ = [x_(1) + v*cos(x_(3)+da);...
+%           x_(2) + v*sin(x_(3)+da);...
+%                          x_(3)+da];
+% 
+%     % predicted covariance
+%     P_ = G*P_*G' + V*M*V';
 
     %----------------------------------------------------------- correction
     %
