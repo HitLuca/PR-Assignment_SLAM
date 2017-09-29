@@ -132,7 +132,7 @@ x = zeros( dim, N );
 P = zeros( dim, dim, N );
 I = eye(dim);
 match = ones(1, N);
-
+x = reshape(x, 3*N, 1);
 for t = 1:N
     %----------------------------------------------------------- prediction
     %
@@ -143,16 +143,16 @@ for t = 1:N
    
     Fx = [eye(3), zeros(3, 3*N)];
 
-    x_ = x_ + Fx' * [
-        -v*sin(x_(3)) + v*sin(x_(3) + da);
-        v*cos(x_(3)) - v*cos(x_(3) + da);
+    x_ = x + Fx' * [v*cos(x_(3)+da);...
+        v*sin(x_(3)+da);...
         da];
                 
-    G = eye(3) + Fx' * [
-        1, 0, -v*sin(x_(3)+da);
-        0, 1, v*cos(x_(3)+da);
+    G = eye(3*N + 3) + Fx' * [...
+        1, 0, -v*sin(x_(3)+da);...
+        0, 1, v*cos(x_(3)+da);...
         0, 0, 1] * Fx;
         
+    size(R)
     P_ = G * P_ * G' + Fx' * R * Fx;
     
     
@@ -179,44 +179,68 @@ for t = 1:N
     %----------------------------------------------------------- correction
     %
     for landmark = 1:size(z,3)
-        if z(1,t,landmark) ~= 0   % if Landmark is measured
-
-            % predicted measurement
-            z_ = [sqrt((L(1,landmark)-x_(1))^2 + (L(2,landmark)-x_(2))^2);...
-                atan2(L(2,landmark)-x_(2),L(1,landmark)-x_(1)) - x_(3)];
-
-            % Jacobian of H with respect to location
-            H(:,:,landmark) = [ -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2), -(L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2),  0;
-                (L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2),       -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2), -1];
-
-            % predicted  measurement covariance
-            S = H(:,:,landmark)*P_*H(:,:,landmark)' + Q;
-            
-            %Kalman gain
-            K(:,:,landmark) = P_* H(:,:,landmark)' / S;
-
-            %innovation
-            nu = z(:,t,landmark) - z_;
-            
-            %validation gate
-            ro = nu'/S*nu; % From Kristensen IROS'03, section III.A
-            
-            if ro < 2
-                %updated mean and covariance
-                foundx(:,landmark) = x_ + K(:,:,landmark)*nu;
-                foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
-            else
-                %propagate known mean and covariance
-                foundx(:,landmark) = x_;
-                foundP_(:,:,landmark) = P_;
-                z(:,t,landmark)=[0; 0];
-            end
-
-        else
-            %propagate known mean and covariance
-            foundx(:,landmark) = x_;
-            foundP_(:,:,landmark) = P_;
+        if z(1, t, landmark) == 0 % if landmark not measured???
+            L(1, landmark) = x_(1) + z(1)*cos(z_(2) + x_(3));
+            L(2, landmark) = x_(2) + z(1)*sin(z_(2) + x_(3));
+            L(3, landmark) = z(3);
         end
+        
+        delta = [L(1, landmark) - x_(1); L(2, landmark) - x_(2)];
+        q = delta'*delta;
+        
+        z_ = [sqrt(q); atan2(delta(2), delta(1)) - x_(3); L(3, landmark)];
+        
+        Fxj = createF(landmark, N);
+        
+        H = 1/q * [
+            -sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2), 0;
+            delta(2), -delta(1), -q, -delta(2), delta(1), 0;
+            0, 0, 0, 0, 0, q] * Fxj;
+        
+        K(:,:,landmark) = P_* H(:,:,landmark)' * inv(K(:,:,landmark) * P_ * K(:,:,landmark)' + Q);
+        
+        nu = z(:,t,landmark) - z_;
+        
+        foundx(:,landmark) = x_ + K(:,:,landmark)*nu;
+        foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
+%         if z(1,t,landmark) ~= 0   % if Landmark is measured
+%
+%             % predicted measurement
+%             z_ = [sqrt((L(1,landmark)-x_(1))^2 + (L(2,landmark)-x_(2))^2);...
+%                 atan2(L(2,landmark)-x_(2),L(1,landmark)-x_(1)) - x_(3)];
+% 
+%             % Jacobian of H with respect to location
+%             H(:,:,landmark) = [ -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2), -(L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2),  0;
+%                 (L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2),       -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2), -1];
+% 
+%             % predicted  measurement covariance
+%             S = H(:,:,landmark)*P_*H(:,:,landmark)' + Q;
+%             
+%             %Kalman gain
+%             K(:,:,landmark) = P_* H(:,:,landmark)' / S;
+% 
+%             %innovation
+%             nu = z(:,t,landmark) - z_;
+%             
+%             %validation gate
+%             ro = nu'/S*nu; % From Kristensen IROS'03, section III.A
+%             
+%             if ro < 2
+%                 %updated mean and covariance
+%                 foundx(:,landmark) = x_ + K(:,:,landmark)*nu;
+%                 foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
+%             else
+%                 %propagate known mean and covariance
+%                 foundx(:,landmark) = x_;
+%                 foundP_(:,:,landmark) = P_;
+%                 z(:,t,landmark)=[0; 0];
+%             end
+% 
+%         else
+%             %propagate known mean and covariance
+%             foundx(:,landmark) = x_;
+%             foundP_(:,:,landmark) = P_;
+%         end
     end
 
     % determine mean
@@ -236,4 +260,15 @@ for i=1:5:size(x, 2)
     cov = P(1:2, 1:2, i);
     h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 0.25);
     set(h,'color','b'); 
+end
+
+function F = createF(j, N)
+    F = zeros(6, 3*N + 3);
+    F(1,1) = 1;
+    F(2,2) = 1;
+    F(3,3) = 1;
+    
+    F(4,3*j+1) = 1;
+    F(5,3*j+2) = 1;
+    F(6,3*j+3) = 1;
 end
