@@ -133,7 +133,7 @@ Sigma_ =  0*eye(3*NK + 3); % a priori S = very certain (no error)
 
 
 Sigma = zeros(3 + 3*NK, 3 + 3*NK, N);
-Sigma(4:end, 4:end, 1) = eye(3*NK)*10^9;
+Sigma(4:end, 4:end, 1) = eye(3*NK)*inf;
 
 match = ones(1, NK);
 
@@ -204,14 +204,16 @@ for t = 2:N
         Sigma_ = (eye(21) - K*H)*Sigma_;
         
         %foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
-    end
-    
-    mu(:,t) = mu_;
-    Sigma(:,:,t) = Sigma_;
-end
 
-x = mu;
-P = Sigma;
+
+    % determine mean
+    x_ = mean(foundx,2);
+    P_ = mean(foundP_,3);
+
+    % create history
+    x(:,t) = x_;
+    P(:,:,t) = P_;
+end
 
 plot(x(1, :), x(2, :), 'r')
 hold on;
