@@ -9,16 +9,11 @@ clear;
 % logfilename = 'dlog_thirdmark.dat'; N = 1434;
 logfilename = 'dlog.dat'; N = 3351;
 
-% expected user input noise
-u_err = .15;
-M = u_err*eye(2); 
-
-% expected robot location noise
-m_err = .1;
-Q = m_err*eye(2); 
-
 %------------------------------------------------------------ data creation
-%
+%expected user input noise
+u_err = .15;
+M = u_err*eye(2);
+
 % true robot position at t = 1
 xt(:,1) = [0 0 0]'; dim = 3;  % x = [x y angle]'
 
@@ -160,8 +155,9 @@ for t = 2:N
         0, 0, -v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
         0, 0, 0] * Fx;
 
-    Sigma_ = G * Sigma(:,:,t-1) * G' + Fx' * (eye(3) * 10^-16.9) * Fx; % + Fx' * R * Fx;
-    
+    Sigma_ = G * Sigma(:,:,t-1) * G'; 
+    R = eye(3) * 10^-6;% *0;
+    Sigma = Sigma + Fx' * R * Fx;
    
     %----------------------------------------------------------- correction
     %
@@ -191,8 +187,6 @@ for t = 2:N
         
         mu_ = mu_ + K * (z(:,t,landmark) - z_);
         Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
-        
-        %foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
     end
     
     mu(:,t) = mu_;
