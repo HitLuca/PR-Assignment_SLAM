@@ -167,7 +167,7 @@ for t = 2:N
         0, 0, -v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
         0, 0, 0] * Fx;
 
-    Sigma_ = G * Sigma(:,:,t-1) * G' + Fx' * Fx; % = G * P_ * G' + Fx' * R * Fx;
+    Sigma_ = G * Sigma(:,:,t-1) * G'; % + Fx' * R * Fx;
     
    
     %----------------------------------------------------------- correction
@@ -210,9 +210,11 @@ end
 x = mu;
 P = Sigma;
 
-plot(x(1, :), x(2, :), 'r')
+scatter(L(1,:),L(2,:), 5, 'red');
 hold on;
-scatter(x(1, :), x(2, :), 5, 'k', 'filled');
+
+plot(x(1, :), x(2, :), 'r')
+scatter(x(1, :), x(2, :), 5, 'k');%, 'filled');
 
 for i=1:5:size(x, 2)
     cov = P(1:2, 1:2, i);
