@@ -24,9 +24,9 @@ clear;
 
 % N is number of observations in dlog.dat
 
-logfilename = 'dlog_firstmark.dat'; N = 758;
+%logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
-% logfilename = 'dlog_thirdmark.dat'; N = 1434;
+ logfilename = 'dlog_thirdmark.dat'; N = 1434;
 % logfilename = 'dlog.dat'; N = 3351;
 
 % expected user input noise
@@ -99,14 +99,15 @@ if ~logfile
 else % logfile
 
 	fid = fopen(logfilename,'r');
-    for t=1:N
+    t = 0;
+    for i=1:N
         tline = fgetl(fid);
         [type,success] = sscanf(tline, '%s', 1);
         if strcmp(type,'mark')
             fprintf(1,'*')
             continue
         end
-        
+        t = t+1;
         [xt(:,t),success] = sscanf(tline, 'obs: %*d %f %f %f', 3);
         xt(1,t)=xt(1,t)/100; % milimeters to decimeters
         xt(2,t)=xt(2,t)/100; % degrees to radians
@@ -136,9 +137,9 @@ else % logfile
         end % for observations
         
     end % for t=1:N
-    fclose(fid)
+    fclose(fid);
 end % if logfile
-				
+N = t;				
 
 %---------------------------------------------------------------- a prioris
 %
@@ -190,7 +191,9 @@ for t = 1:N
             % Jacobian of H with respect to location
             H(:,:,landmark) = [ -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2), -(L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2)^(1/2),  0;
                 (L(2,landmark)-x_(2))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2),       -(L(1,landmark)-x_(1))/(L(1,landmark)^2-2*L(1,landmark)*x_(1)+x_(1)^2+L(2,landmark)^2-2*L(2,landmark)*x_(2)+x_(2)^2), -1];
-
+            
+            
+            Q = diag([.15*z(1, t, landmark), .10]+10^-9);
             % predicted  measurement covariance
             S = H(:,:,landmark)*P_*H(:,:,landmark)' + Q;
             
@@ -236,6 +239,6 @@ scatter(x(1, :), x(2, :), 5, 'k', 'filled');
 
 for i=1:5:size(x, 2)
     cov = P(1:2, 1:2, i);
-    h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 0.25);
+    h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 1/5);
     set(h,'color','b'); 
 end
