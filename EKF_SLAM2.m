@@ -6,8 +6,8 @@ clear;
 
 % logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
-% logfilename = 'dlog_thirdmark.dat'; N = 1434;
-logfilename = 'dlog.dat'; N = 3351;
+logfilename = 'dlog_thirdmark.dat'; N = 1434;
+% logfilename = 'dlog.dat'; N = 3351;
 
 %------------------------------------------------------------ data creation
 %expected user input noise
@@ -125,15 +125,14 @@ NK = 6; % number of landmarks
 
 
 Sigma = zeros(3 + 2*NK, 3 + 2*NK, N);
-Sigma(4:end, 4:end, 1) = eye(2*NK)*10^6;
+Sigma(4:end, 4:end, 1) = eye(2*NK)*10^9;
 
-LK = zeros(2 * NK,N);
+mu = [xt; zeros(2 * NK,N)];
 
-for i =1:N
-    LK(:,i) = reshape(z(:,i,:), 2 * NK,1);
+for i=1:NK
+    mu(3 + i*2-1, 1) = mu(1, 1) + z(1, 1, i)*cos(z(2, 1, i) + mu(3, 1));
+    mu(3 + i*2, 1) = mu(2, 1) + z(1, 1, i)*sin(z(2, 1, i) + mu(3, 1));
 end
-mu = [xt; LK];
-
 
 for t = 2:N
     %----------------------------------------------------------- prediction
@@ -162,31 +161,27 @@ for t = 2:N
     %----------------------------------------------------------- correction
     %
     for landmark = 1:size(z,3)
-        if z(1, t, landmark) == 0 % if landmark not measured
-            mu(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
-            mu(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
-        end
+        if z(1, t, landmark) ~= 0 % if landmark not measured
+            mu_(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
+            mu_(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
         
-        
-        Q = diag([.15*z(1, t, landmark), .10]+10^-9);
-        
-%         mu_(3 +2*(landmark-1) + 1) = mu_(1) + mu(3 +2*(landmark-1) + 1)*cos(mu(3 +2*(landmark-1) + 2) + mu(3));
-%         mu_(3 +2*(landmark-1) + 2) = mu_(2) + mu(3 +2*(landmark-1) + 1)*sin(mu(3 +2*(landmark-1) + 2) + mu(3));
-        
-        delta = [mu_(3 +2*(landmark-1) + 1) - mu_(1); mu_(3 +2*(landmark-1) + 2) - mu_(2)];
-        q = delta'*delta + 10^-9;
-        
-        z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3)];
-        
-        Fxj = createF(landmark, NK);
-        
-        H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
-            delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
+            Q = diag([.15*z(1, t, landmark), .10]+10^-9);
 
-        K = Sigma_ * H' / (H * Sigma_ * H' + Q);
-        
-        mu_ = mu_ + K * (z(:,t,landmark) - z_);
-        Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
+            delta = [mu_(3 +2*(landmark-1) + 1) - mu_(1); mu_(3 +2*(landmark-1) + 2) - mu_(2)];
+            q = delta'*delta + 10^-9;
+
+            z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3)];
+
+            Fxj = createF(landmark, NK);
+
+            H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
+                delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
+
+            K = Sigma_ * H' / (H * Sigma_ * H' + Q);
+
+            mu_ = mu_ + K * (z(:,t,landmark) - z_);
+            Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
+        end
     end
     
     mu(:,t) = mu_;
@@ -200,11 +195,22 @@ hold on;
 plot(mu(1, :), mu(2, :), 'r')
 scatter(mu(1, :), mu(2, :), 5, 'k');%, 'filled');
 
-for i=1:5:size(mu, 2)
-    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i), 0.25);
+for i=1:size(mu, 2)
+    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i));
     set(h,'color','b'); 
 end
 
+% for i=4:2:size(mu, 1)
+%     scatter(mu(i, :), mu(i+1, :), 'x');
+%     hold on;
+% end
+
+for i=4:2:size(mu, 1)
+    scatter(mu(i, end), mu(i+1, end),'x');
+    h = plot_gaussian_ellipsoid(mu(i:i+1, end), Sigma(i:i+1, i:i+1, end));
+    set(h,'color','b'); 
+end
+    
 function F = createF(j, N)
     F = zeros(5, 2*N + 3);
     F(1,1) = 1;
