@@ -154,8 +154,15 @@ for t = 2:N
         0, 0, -v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
         0, 0, 0] * Fx;
 
-    Sigma_ = G * Sigma(:,:,t-1) * G'; 
-    R = eye(3) * 10^-6;% *0;
+    Sigma_ = G * Sigma(:,:,t-1) * G';
+    
+    
+    M = eye(2) * 10^-4;
+    V = [cos(mu_(3)+omega), -v*sin(mu_(3)+omega);...
+         sin(mu_(3)+omega),  v*cos(mu_(3)+omega);...
+                    0,               1];
+    R = V*M*V';
+    
     Sigma = Sigma + Fx' * R * Fx;
    
     %----------------------------------------------------------- correction
@@ -195,7 +202,7 @@ hold on;
 plot(mu(1, :), mu(2, :), 'r')
 scatter(mu(1, :), mu(2, :), 5, 'k');%, 'filled');
 
-for i=1:size(mu, 2)
+for i=1:10:size(mu, 2)
     h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i));
     set(h,'color','b'); 
 end
@@ -206,7 +213,7 @@ end
 % end
 
 for i=4:2:size(mu, 1)
-    scatter(mu(i, end), mu(i+1, end),'x');
+    scatter(mu(i, end), mu(i+1, end),'x', 'red');
     h = plot_gaussian_ellipsoid(mu(i:i+1, end), Sigma(i:i+1, i:i+1, end));
     set(h,'color','b'); 
 end
