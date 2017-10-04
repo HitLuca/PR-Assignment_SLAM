@@ -20,13 +20,13 @@
 
 %--------------------------------------------------------------------- init
 %
-clear;
+clear all;
 
 % N is number of observations in dlog.dat
 
-%logfilename = 'dlog_firstmark.dat'; N = 758;
+% logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
- logfilename = 'dlog_thirdmark.dat'; N = 1434;
+logfilename = 'dlog_thirdmark.dat'; N = 1434;
 % logfilename = 'dlog.dat'; N = 3351;
 
 % expected user input noise
@@ -233,12 +233,26 @@ for t = 1:N
     P(:,:,t) = P_;
 end
 
-plot(x(1, :), x(2, :), 'r')
 hold on;
-scatter(x(1, :), x(2, :), 5, 'k', 'filled');
-
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(x(1, :), x(2, :), 'r')
+plot(xt(1, :), xt(2, :), 'k')
+hold on
+scatter(x(1, :), x(2, :), 5, 'r', 'filled');
+scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
+% xlim([-15, 15]);
+% ylim([-10, 10]);
+    
+figure();
+hold on;
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(x(1, :), x(2, :), 'r')
+scatter(x(1, :), x(2, :), 5, 'r', 'filled');
 for i=1:5:size(x, 2)
     cov = P(1:2, 1:2, i);
-    h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 1/5);
+    h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 0.1);
     set(h,'color','b'); 
 end
+% xlim([-15, 15]);
+% ylim([-10, 10]);
+

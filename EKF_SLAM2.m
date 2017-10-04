@@ -157,13 +157,13 @@ for t = 2:N
     Sigma_ = G * Sigma(:,:,t-1) * G';
     
     
-    M = eye(2) * 10^-4;
+    M = eye(2) * 10^-9;
     V = [cos(mu_(3)+omega), -v*sin(mu_(3)+omega);...
          sin(mu_(3)+omega),  v*cos(mu_(3)+omega);...
                     0,               1];
     R = V*M*V';
     
-    Sigma = Sigma + Fx' * R * Fx;
+    Sigma_ = Sigma_ + Fx' * R * Fx;
    
     %----------------------------------------------------------- correction
     %
@@ -195,28 +195,46 @@ for t = 2:N
     Sigma(:,:,t) = Sigma_;
 end
 
-figure();
-scatter(L(1,:),L(2,:), 5, 'red');
-hold on;
+close all
 
-plot(mu(1, :), mu(2, :), 'r')
-scatter(mu(1, :), mu(2, :), 5, 'k');%, 'filled');
-
-for i=1:10:size(mu, 2)
-    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i));
-    set(h,'color','b'); 
+for i = 1:10:N
+    clf 
+    hold on;
+    scatter(mu(1, 1:i), mu(2, 1:i), 10, 'filled', 'black');  
+    for j=1:NK
+        scatter(mu(3+j*2-1, i), mu(3+j*2, i), 25, j, 'filled'); 
+        scatter(L(1,j),L(2,j), 25, j, 'filled', 'MarkerEdgeColor', 'black');
+        h = plot_gaussian_ellipsoid(mu(3+j*2-1:3+j*2, i), Sigma(3+j*2-1:3+j*2, 3+j*2-1:3+j*2, i));
+        set(h,'color','b'); 
+    end
+    xlim([-25, 25]);
+    ylim([-20, 20]);
+    drawnow
+    pause(0.01)
 end
 
-% for i=4:2:size(mu, 1)
-%     scatter(mu(i, :), mu(i+1, :), 'x');
-%     hold on;
+% figure();
+% scatter(L(1,:),L(2,:), 5, 'red');
+% hold on;
+% 
+% plot(mu(1, :), mu(2, :), 'r')
+% scatter(mu(1, :), mu(2, :), 5, 'k');%, 'filled');
+% 
+% for i=1:10:size(mu, 2)
+%     h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i));
+%     set(h,'color','b'); 
 % end
-
-for i=4:2:size(mu, 1)
-    scatter(mu(i, end), mu(i+1, end),'x', 'red');
-    h = plot_gaussian_ellipsoid(mu(i:i+1, end), Sigma(i:i+1, i:i+1, end));
-    set(h,'color','b'); 
-end
+% 
+% % for i=4:2:size(mu, 1)
+% %     scatter(mu(i, :), mu(i+1, :), 'x');
+% %     hold on;
+% % end
+% 
+% for i=4:2:size(mu, 1)
+%     scatter(mu(i, end), mu(i+1, end),'x', 'red');
+%     h = plot_gaussian_ellipsoid(mu(i:i+1, end), Sigma(i:i+1, i:i+1, end));
+%     set(h,'color','b'); 
+% end
     
 function F = createF(j, N)
     F = zeros(5, 2*N + 3);
