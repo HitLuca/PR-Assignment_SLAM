@@ -169,9 +169,10 @@ for t = 2:N
     %
     for landmark = 1:size(z,3)
         if z(1, t, landmark) ~= 0 % if landmark not measured
-            mu_(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
-            mu_(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
-        
+            if mu_(3 +2*(landmark-1) + 1) == 0 && mu_(3 +2*(landmark-1) + 1) == 0
+                mu_(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
+                mu_(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
+            end
             Q = diag([.15*z(1, t, landmark), .10]+10^-9);
 
             delta = [mu_(3 +2*(landmark-1) + 1) - mu_(1); mu_(3 +2*(landmark-1) + 2) - mu_(2)];
