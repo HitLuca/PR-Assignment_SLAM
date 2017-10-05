@@ -8,8 +8,8 @@ close all;
 
 % logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
-% logfilename = 'dlog_thirdmark.dat'; N = 1434;
-logfilename = 'dlog.dat'; N = 3351;
+logfilename = 'dlog_thirdmark.dat'; N = 1434;
+% logfilename = 'dlog.dat'; N = 3351;
 
 %------------------------------------------------------------ data creation
 %expected user input noise
@@ -127,7 +127,7 @@ NK = 6; % number of landmarks
 
 
 Sigma = zeros(3 + 2*NK, 3 + 2*NK, N);
-Sigma(4:end, 4:end, 1) = eye(2*NK)*10^9;
+Sigma(4:end, 4:end, 1) = eye(2*NK)*10^20;
 
 mu = [xt; zeros(2 * NK,N)];
 
@@ -188,10 +188,21 @@ for t = 2:N
             H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
                 delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
 
-            K = Sigma_ * H' / (H * Sigma_ * H' + Q);
+            S = H * Sigma_ * H' + Q;
+            
+            K = Sigma_ * H' / S;
 
-            mu_ = mu_ + K * (z(:,t,landmark) - z_);
-            Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
+            %innovation
+            nu = z(:,t,landmark) - z_;
+            
+            %validation gate
+            ro = nu'/S*nu; % From Kristensen IROS'03, section III.A
+            
+            if ro < 2
+                %updated mean and covariance
+                mu_ = mu_ + K*nu;
+                Sigma_ = (eye(size(mu_, 1))-K*H)*Sigma_;
+            end
         end
     end
     
@@ -201,15 +212,15 @@ end
 
 
 % ------plot mu vs xt
-hold on;
-% scatter(L(1,:),L(2,:), 10, 'b');
-plot(mu(1, :), mu(2, :), 'r')
-plot(xt(1, :), xt(2, :), 'k')
-hold on
-scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
-scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
-% xlim([-15, 15]);
-% ylim([-10, 10]);
+% hold on;
+% % scatter(L(1,:),L(2,:), 10, 'b');
+% plot(mu(1, :), mu(2, :), 'r')
+% plot(xt(1, :), xt(2, :), 'k')
+% hold on
+% scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+% scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
+% % xlim([-15, 15]);
+% % ylim([-10, 10]);
 
 
 % ------plot robot path with covariances
@@ -218,17 +229,16 @@ hold on;
 % scatter(L(1,:),L(2,:), 10, 'b');
 plot(mu(1, :), mu(2, :), 'r')
 scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
-for i=1:5:size(mu, 2)
-    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i), 1);
+for i=1:size(mu, 2)
+    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i));
     set(h,'color','b'); 
 end
 
-
 % ------dynamical plot of the predicted landmarks positions
 % figure();
-% hold on;
 % for i = 1:10:N
 %     clf 
+%     hold on;
 %     scatter(mu(1, 1:i), mu(2, 1:i), 10, 'filled', 'black');  
 %     for j=1:NK
 %         scatter(mu(3+j*2-1, i), mu(3+j*2, i), 25, j, 'filled'); 
@@ -242,7 +252,18 @@ end
 %     pause(0.01)
 % end
 
-    
+% ------ plot of the final predicted landmarks positions
+% figure();
+% for j=1:NK
+%     scatter(mu(3+j*2-1, end), mu(3+j*2, end), 25, j, 'filled'); 
+%     scatter(L(1,j),L(2,j), 25, j, 'filled', 'MarkerEdgeColor', 'black');
+%     h = plot_gaussian_ellipsoid(mu(3+j*2-1:3+j*2, end), Sigma(3+j*2-1:3+j*2, 3+j*2-1:3+j*2, end));
+%     set(h,'color','b'); 
+% end
+% xlim([-25, 25]);
+% ylim([-20, 20]);
+
+
 function F = createF(j, N)
     F = zeros(5, 2*N + 3);
     F(1,1) = 1;
