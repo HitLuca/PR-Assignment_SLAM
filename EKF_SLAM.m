@@ -1,24 +1,21 @@
 %--------------------------------------------------------------------- init
 %
+
 clear;
+close all;
 
 % N is number of observations in dlog.dat
 
-logfilename = 'dlog_firstmark.dat'; N = 758;
+% logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
 % logfilename = 'dlog_thirdmark.dat'; N = 1434;
-% logfilename = 'dlog.dat'; N = 3351;
-
-% expected user input noise
-u_err = .15;
-M = u_err*eye(2); 
-
-% expected robot location noise
-m_err = .1;
-Q = m_err*eye(2); 
+logfilename = 'dlog.dat'; N = 3351;
 
 %------------------------------------------------------------ data creation
-%
+%expected user input noise
+u_err = .15;
+M = u_err*eye(2);
+
 % true robot position at t = 1
 xt(:,1) = [0 0 0]'; dim = 3;  % x = [x y angle]'
 
@@ -64,7 +61,8 @@ if ~logfile
     %------------------------------------------------------------- measurements
     %
     perc = .7; % percentage of Landmark measurement loss
-    for t=1:N
+    t = 1;
+    for i=1:N
         for landmark=1:size(L,2)
             if rand > perc
                 % z = [distance angle]'
@@ -74,19 +72,21 @@ if ~logfile
                 z(:,t,landmark) = [0;0];
             end
         end
+        t = t + 1;
     end
 
 else % logfile
 
 	fid = fopen(logfilename,'r');
-    for t=1:N
+    t = 0;
+    for i=1:N
         tline = fgetl(fid);
         [type,success] = sscanf(tline, '%s', 1);
         if strcmp(type,'mark')
             fprintf(1,'*')
             continue
         end
-
+        t = t + 1;
         [xt(:,t),success] = sscanf(tline, 'obs: %*d %f %f %f', 3);
         xt(1,t)=xt(1,t)/100; % milimeters to decimeters
         xt(2,t)=xt(2,t)/100; 
@@ -114,124 +114,141 @@ else % logfile
                 end
             end % for landmarks
         end % for observations
-        
     end % for t=1:N
     fclose(fid);
 end % if logfile
 				
-
+N = t;
 NK = 6; % number of landmarks
 
-%---------------------------------------------------------------- a prioris
-%
-x_ = xt(1:3,1); % a priori x = true robot position
-Sigma_ =  0*eye(3*NK + 3); % a priori S = very certain (no error)
-
-
-%----------------------------------------------------------------------- EKF
+% -----------------------------------------------------------------------
+% EKF SLAM
 %
 
 
-Sigma = zeros(3 + 3*NK, 3 + 3*NK, N);
-Sigma(4:end, 4:end, 1) = eye(3*NK)*10^9;
+Sigma = zeros(3 + 2*NK, 3 + 2*NK, N);
+Sigma(4:end, 4:end, 1) = eye(2*NK)*10^9;
 
-match = ones(1, NK);
+mu = [xt; zeros(2 * NK,N)];
 
-L = zeros(18,N);
-
-z(3,:,:) = 0;
-for i =1:N
-    L(:,i) = reshape(z(:,i,:),18,1);
+for i=1:NK
+    mu(3 + i*2-1, 1) = mu(1, 1) + z(1, 1, i)*cos(z(2, 1, i) + mu(3, 1));
+    mu(3 + i*2, 1) = mu(2, 1) + z(1, 1, i)*sin(z(2, 1, i) + mu(3, 1));
 end
-mu = [xt; L];
-
 
 for t = 2:N
     %----------------------------------------------------------- prediction
     %3
 
     %get user input
-    v = u(1,t);		% velocity
-    omega = u(2,t) + 10^(-6);	% delta angle
-    x = mu(1:3, t);
+    v = u(1,t); % velocity
+    omega = u(2,t) + 10^-10;	% delta angle
+    x = mu(1:3, t-1);
     
-    Fx = [eye(3), zeros(3, 3*NK)];
+    Fx = [eye(3), zeros(3, 2*NK)];
     
     mu_ = mu(:, t-1) + Fx' * [-v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
                             v/omega * cos(x(3)) - v/omega * cos(x(3)+omega);...
                             omega];
-                        
-                     
                 
-    G = eye(3*NK + 3) + Fx' * [...
+    G = eye(2*NK + 3) + Fx' * [...
         0, 0, -v/omega * cos(x(3)) + v/omega * cos(x(3)+omega);...
         0, 0, -v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
         0, 0, 0] * Fx;
 
-    Sigma_ = G * Sigma(:,:,t-1) * G' + Fx' * Fx; % = G * P_ * G' + Fx' * R * Fx;
+    Sigma_ = G * Sigma(:,:,t-1) * G';
     
+    
+    M = eye(2) * 10^-9;
+    V = [cos(mu_(3)+omega), -v*sin(mu_(3)+omega);...
+         sin(mu_(3)+omega),  v*cos(mu_(3)+omega);...
+                    0,               1];
+    R = V*M*V';
+    
+    Sigma_ = Sigma_ + Fx' * R * Fx;
    
     %----------------------------------------------------------- correction
     %
     for landmark = 1:size(z,3)
-        if z(1, t, landmark) == 0 % if landmark not measured???
-            mu(3*landmark + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
-            mu(3*landmark + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
-            mu(3*landmark + 3) = 10^-6;
-        end
-        
-        
-        Q = diag([.15*z(1, t, landmark), .10, 10^-6]);
-        
-        mu_(3*landmark + 1) = mu_(1) + mu(3*landmark + 1)*cos(mu(3*landmark + 2) + mu(3));
-        mu_(3*landmark + 2) = mu_(2) + mu(3*landmark + 1)*sin(mu(3*landmark + 2) + mu(3));
-        mu_(3*landmark + 3) = 10^-6;
-        
-        delta = [mu_(3*landmark + 1) - mu_(1); mu_(3*landmark + 2) - mu_(2)];
-        q = delta'*delta;
-        
-        z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3); 0];
-        
-        Fxj = createF(landmark, NK);
-        
-        H = 1/q * [
-            -sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2), 0;
-            delta(2), -delta(1), -q, -delta(2), delta(1), 0;
-            0, 0, 0, 0, 0, q] * Fxj;
+        if z(1, t, landmark) ~= 0 % if landmark not measured
+            if mu_(3 +2*(landmark-1) + 1) == 0 && mu_(3 +2*(landmark-1) + 1) == 0
+                mu_(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
+                mu_(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
+            end
+            
+            Q = diag([.15*z(1, t, landmark), .10]+10^-9);
 
-       
-        K = Sigma_* H' / (H * Sigma_ * H' + Q);
-        
-        mu_ = mu_ + K* (z(:,t,landmark) - z_);
-        Sigma_ = (eye(21) - K*H)*Sigma_;
-        
-        %foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
+            delta = [mu_(3 +2*(landmark-1) + 1) - mu_(1); mu_(3 +2*(landmark-1) + 2) - mu_(2)];
+            q = delta'*delta + 10^-9;
+
+            z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3)];
+
+            Fxj = createF(landmark, NK);
+
+            H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
+                delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
+
+            K = Sigma_ * H' / (H * Sigma_ * H' + Q);
+
+            mu_ = mu_ + K * (z(:,t,landmark) - z_);
+            Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
+        end
     end
     
     mu(:,t) = mu_;
     Sigma(:,:,t) = Sigma_;
 end
 
-x = mu;
-P = Sigma;
 
-plot(x(1, :), x(2, :), 'r')
+% ------plot mu vs xt
 hold on;
-scatter(x(1, :), x(2, :), 5, 'k', 'filled');
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(mu(1, :), mu(2, :), 'r')
+plot(xt(1, :), xt(2, :), 'k')
+hold on
+scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
+% xlim([-15, 15]);
+% ylim([-10, 10]);
 
-for i=1:5:size(x, 2)
-    cov = P(1:2, 1:2, i);
-    h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 0.25);
+
+% ------plot robot path with covariances
+figure();
+hold on;
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(mu(1, :), mu(2, :), 'r')
+scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+for i=1:5:size(mu, 2)
+    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i), 1);
     set(h,'color','b'); 
 end
 
+
+% ------dynamical plot of the predicted landmarks positions
+% figure();
+% hold on;
+% for i = 1:10:N
+%     clf 
+%     scatter(mu(1, 1:i), mu(2, 1:i), 10, 'filled', 'black');  
+%     for j=1:NK
+%         scatter(mu(3+j*2-1, i), mu(3+j*2, i), 25, j, 'filled'); 
+%         scatter(L(1,j),L(2,j), 25, j, 'filled', 'MarkerEdgeColor', 'black');
+%         h = plot_gaussian_ellipsoid(mu(3+j*2-1:3+j*2, i), Sigma(3+j*2-1:3+j*2, 3+j*2-1:3+j*2, i));
+%         set(h,'color','b'); 
+%     end
+%     xlim([-25, 25]);
+%     ylim([-20, 20]);
+%     drawnow
+%     pause(0.01)
+% end
+
+    
 function F = createF(j, N)
-    F = zeros(6, 3*N + 3);
+    F = zeros(5, 2*N + 3);
     F(1,1) = 1;
     F(2,2) = 1;
     F(3,3) = 1;
     
-    F(4,3*j+1) = 1;
-    F(5,3*j+2) = 1;
-    F(6,3*j+3) = 1;
+    F(4,(2*j)+2) = 1;
+    F(5,(2*j)+3) = 1;
 end

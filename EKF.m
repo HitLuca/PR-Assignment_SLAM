@@ -249,7 +249,6 @@ hold on;
 plot(x(1, :), x(2, :), 'r')
 scatter(x(1, :), x(2, :), 5, 'r', 'filled');
 for i=1:5:size(x, 2)
-    cov = P(1:2, 1:2, i);
     h = plot_gaussian_ellipsoid(x(1:2, i), P(1:2, 1:2, i), 0.1);
     set(h,'color','b'); 
 end

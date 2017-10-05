@@ -132,18 +132,17 @@ Sigma_ =  0*eye(3*NK + 3); % a priori S = very certain (no error)
 %
 
 
-Sigma = zeros(3 + 3*NK, 3 + 3*NK, N);
-Sigma(4:end, 4:end, 1) = eye(3*NK)*inf;
+Sigma = zeros(3 + 2*NK, 3 + 2*NK, N);
+Sigma(4:end, 4:end, 1) = eye(2*NK)*10^6;
 
 match = ones(1, NK);
 
-L = zeros(18,N);
+LK = zeros(12,N);
 
-z(3,:,:) = 0;
 for i =1:N
-    L(:,i) = reshape(z(:,i,:),18,1);
+    LK(:,i) = reshape(z(:,i,:),12,1);
 end
-mu = [xt; L];
+mu = [xt; LK];
 
 
 for t = 2:N
@@ -152,10 +151,10 @@ for t = 2:N
 
     %get user input
     v = u(1,t);		% velocity
-    omega = u(2,t) + 10^(-6);	% delta angle
+    omega = u(2,t) + 10^-6;	% delta angle
     x = mu(1:3, t);
     
-    Fx = [eye(3), zeros(3, 3*NK)];
+    Fx = [eye(3), zeros(3, 2*NK)];
     
     mu_ = mu(:, t-1) + Fx' * [-v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
                             v/omega * cos(x(3)) - v/omega * cos(x(3)+omega);...
@@ -163,7 +162,7 @@ for t = 2:N
                         
                      
                 
-    G = eye(3*NK + 3) + Fx' * [...
+    G = eye(2*NK + 3) + Fx' * [...
         0, 0, -v/omega * cos(x(3)) + v/omega * cos(x(3)+omega);...
         0, 0, -v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
         0, 0, 0] * Fx;
@@ -175,45 +174,41 @@ for t = 2:N
     %
     for landmark = 1:size(z,3)
         if z(1, t, landmark) == 0 % if landmark not measured???
-            L(1, landmark) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
-            L(2, landmark) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
+            mu(3*landmark + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
+            mu(3*landmark + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
         end
         
         
-        Q = diag([.15*z(1, t, landmark), .10, 0]);
+        Q = diag([.15*z(1, t, landmark), .10]+10^-6);
         
         mu_(3*landmark + 1) = mu_(1) + mu(3*landmark + 1)*cos(mu(3*landmark + 2) + mu(3));
         mu_(3*landmark + 2) = mu_(2) + mu(3*landmark + 1)*sin(mu(3*landmark + 2) + mu(3));
         
         delta = [mu_(3*landmark + 1) - mu_(1); mu_(3*landmark + 2) - mu_(2)];
-        q = delta'*delta;
+        q = delta'*delta + 10^-6;
         
-        z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3); 0];
+        z_ = [sqrt(q); atan2(delta(2), delta(1)) - mu_(3)];
         
         Fxj = createF(landmark, NK);
         
-        H = 1/q * [
-            -sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2), 0;
-            delta(2), -delta(1), -q, -delta(2), delta(1), 0;
-            0, 0, 0, 0, 0, q] * Fxj;
+        H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
+            delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
 
        
         K = Sigma_* H' / (H * Sigma_ * H' + Q);
         
-        mu_ = mu_ + K* (z(:,t,landmark) - z_);
-        Sigma_ = (eye(21) - K*H)*Sigma_;
+        mu_ = mu_( + K* (z(:,t,landmark) - z_);
+        Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
         
         %foundP_(:,:,landmark) = (I-K(:,:,landmark)*H(:,:,landmark))*P_;
-
-
-    % determine mean
-    x_ = mean(foundx,2);
-    P_ = mean(foundP_,3);
-
-    % create history
-    x(:,t) = x_;
-    P(:,:,t) = P_;
+    end
+    
+    mu(:,t) = mu_;
+    Sigma(:,:,t) = Sigma_;
 end
+
+x = mu;
+P = Sigma;
 
 plot(x(1, :), x(2, :), 'r')
 hold on;
@@ -226,12 +221,11 @@ for i=1:5:size(x, 2)
 end
 
 function F = createF(j, N)
-    F = zeros(6, 3*N + 3);
+    F = zeros(5, 2*N + 3);
     F(1,1) = 1;
     F(2,2) = 1;
     F(3,3) = 1;
     
-    F(4,3*j+1) = 1;
-    F(5,3*j+2) = 1;
-    F(6,3*j+3) = 1;
+    F(4,(2*j)+1) = 1;
+    F(5,(2*j)+2) = 1;
 end
