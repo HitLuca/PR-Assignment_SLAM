@@ -1,6 +1,3 @@
-%--------------------------------------------------------------------- init
-%
-
 clear;
 close all;
 
@@ -11,8 +8,8 @@ close all;
 logfilename = 'dlog_thirdmark.dat'; N = 1434;
 % logfilename = 'dlog.dat'; N = 3351;
 
-%------------------------------------------------------------ data creation
-%expected user input noise
+% ----- data creation
+% expected user input noise
 u_err = .15;
 M = u_err*eye(2);
 
@@ -125,11 +122,11 @@ end % if logfile
 N = t;
 NK = 6; % number of landmarks
 
-% -----------------------------------------------------------------------
+% --------
 % EKF SLAM
-%
+% --------
 
-
+% ---- initialization
 Sigma = zeros(3 + 2*NK, 3 + 2*NK, N);
 Sigma(4:end, 4:end, 1) = eye(2*NK)*10^9;
 
@@ -141,12 +138,14 @@ for i=1:NK
 end
 
 for t = 2:N
-    %----------------------------------------------------------- prediction
-    %3
+    % ---- state prediction
 
+    % old velocity model
     %get user input
     %v = u(1,t); % velocity
     %omega = u(2,t) + 10^-10;	% delta angle
+    
+    % odometry model
     rot1 = u(1,t);
     trans = u(2,t);
     rot2 = u(3,t);
@@ -155,13 +154,19 @@ for t = 2:N
     
     Fx = [eye(3), zeros(3, 2*NK)];
     
+    % old velocity model prediction
 %     mu_ = mu(:, t-1) + Fx' * [-v/omega * sin(x(3)) + v/omega * sin(x(3)+omega);...
 %                             v/omega * cos(x(3)) - v/omega * cos(x(3)+omega);...
 %                             omega];
+
+    % odometry model prediction
      mu_ = mu(:, t-1) + Fx' * [trans * cos(x(3)+rot1);...
                             trans * sin(x(3)+rot1);...
                             rot1 + rot2];
                 
+    % ---- uncertainty prediction
+    
+    % Jacobian with respect to robot location
     G = eye(2*NK + 3) + Fx' * [...
         0, 0, -trans * sin(x(3)+rot1);...
         0, 0, trans * cos(x(3)+rot1);...
@@ -169,8 +174,9 @@ for t = 2:N
 
     Sigma_ = G * Sigma(:,:,t-1) * G';
     
-    
+    % Jacobian with respect to control
     M = eye(3) * 10^-4.5;
+%     M = eye(3) * 10^-9;
     
     V = [-trans*cos(mu_(3)+rot1), cos(mu_(3)+rot1), 0;...
         trans*sin(mu_(3)+rot1),  sin(mu_(3)+rot1), 0;...
@@ -180,15 +186,16 @@ for t = 2:N
     
     Sigma_ = Sigma_ + Fx' * R * Fx;
    
-    %----------------------------------------------------------- correction
-    %
+    % ---- correction
     for landmark = 1:size(z,3)
-        if z(1, t, landmark) ~= 0 % if landmark not measured
+        if z(1, t, landmark) ~= 0 
+            % if landmark has never been measured
             if mu_(3 +2*(landmark-1) + 1) == 0 && mu_(3 +2*(landmark-1) + 1) == 0
                 mu_(3 +2*(landmark-1) + 1) = mu_(1) + z(1, t, landmark)*cos(z(2, t, landmark) + mu_(3));
                 mu_(3 +2*(landmark-1) + 2) = mu_(2) + z(1, t, landmark)*sin(z(2, t, landmark) + mu_(3));
             end
             
+            % noise in readings/angle
             Q = diag([.15*z(1, t, landmark), .10]+10^-9);
 
             delta = [mu_(3 +2*(landmark-1) + 1) - mu_(1); mu_(3 +2*(landmark-1) + 2) - mu_(2)];
@@ -201,52 +208,74 @@ for t = 2:N
             H = 1/q * [-sqrt(q)*delta(1), -sqrt(q) * delta(2), 0, sqrt(q)*delta(1), sqrt(q) * delta(2);
                 delta(2), -delta(1), -q, -delta(2), delta(1)] * Fxj;
 
+            % precision matrix
             S = H * Sigma_ * H' + Q;
             
+            % Kalman gain
             K = Sigma_ * H' / S;
 
-            %innovation
+            % innovation
             nu = z(:,t,landmark) - z_;
             
-            %validation gate
-            ro = nu'/S*nu; % From Kristensen IROS'03, section III.A
+            % validation gate
+            ro = nu'/S*nu;
             
             if ro < 2
                 %updated mean and covariance
                 mu_ = mu_ + K*nu;
                 Sigma_ = (eye(size(mu_, 1))-K*H)*Sigma_;
             end
+            
+            % old update
+%             mu_ = mu_ + K * (z(:,t,landmark) - z_);
+%             Sigma_ = (eye(2*NK+3) - K*H)*Sigma_;
         end
     end
     
+    % ---- final mu and sigma
     mu(:,t) = mu_;
     Sigma(:,:,t) = Sigma_;
 end
 
+markers = [-10, -10, 0, 5, 5; 0, 5, 0, 0, -5];
 
-% ------plot mu vs xt
-% hold on;
-% % scatter(L(1,:),L(2,:), 10, 'b');
-% plot(mu(1, :), mu(2, :), 'r')
-% plot(xt(1, :), xt(2, :), 'k')
-% hold on
-% scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
-% scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
-% % xlim([-15, 15]);
-% % ylim([-10, 10]);
-% scatter([-10, -10, 0, 5, 5], [0, 5, 0, 0, -5]);
+% % ------plot trajectory and markers
+hold on;
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(mu(1, :), mu(2, :), 'r')
+hold on
+scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+% xlim([-15, 15]);
+% ylim([-10, 10]);
+scatter(markers(1, 3:end), markers(2, 3:end), 'blue', 'filled');
 
+% % ------plot mu vs xt
+hold on;
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(mu(1, :), mu(2, :), 'r')
+plot(xt(1, :), xt(2, :), 'k')
+hold on
+scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+scatter(xt(1, :), xt(2, :), 5, 'k', 'filled');
+% xlim([-15, 15]);
+% ylim([-10, 10]);
+scatter(markers(1, 3:end), markers(2, 3:end), 'filled');
+
+% ---- plot of the markers positions
+scatter(markers(1, :), markers(2, :), 'filled');
+xlim([-15, 10]);
+ylim([-10, 10]);
 
 % ------plot robot path with covariances
-% figure();
-% hold on;
-% % scatter(L(1,:),L(2,:), 10, 'b');
-% plot(mu(1, :), mu(2, :), 'r')
-% scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
-% for i=1:5:size(mu, 2)
-%     h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i), 1);
-%     set(h,'color','b'); 
-% end
+figure();
+hold on;
+% scatter(L(1,:),L(2,:), 10, 'b');
+plot(mu(1, :), mu(2, :), 'r')
+scatter(mu(1, :), mu(2, :), 5, 'r', 'filled');
+for i=1:5:size(mu, 2)
+    h = plot_gaussian_ellipsoid(mu(1:2, i), Sigma(1:2, 1:2, i), 1);
+    set(h,'color','b'); 
+end
 
 
 % ------dynamical plot of the predicted landmarks positions

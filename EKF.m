@@ -24,9 +24,9 @@ clear all;
 
 % N is number of observations in dlog.dat
 
-% logfilename = 'dlog_firstmark.dat'; N = 758;
+logfilename = 'dlog_firstmark.dat'; N = 758;
 % logfilename = 'dlog_secondmark.dat'; N = 1159;
-logfilename = 'dlog_thirdmark.dat'; N = 1434;
+% logfilename = 'dlog_thirdmark.dat'; N = 1434;
 % logfilename = 'dlog.dat'; N = 3351;
 
 % expected user input noise
